@@ -105,7 +105,7 @@ class MLPipelineFactory:
     def __init__(self, problemType, algorithm, data, target, numericCols, categoricalCols=None, categoricalEncoding="indexed", dropna=True):
         """ """
         self.problemType = problemType
-        self.data = data
+        self.data = data  # TODO: copy dataframe?
         self.algorithm = algorithm
         self.target = target
         self.numericCols = numericCols
@@ -113,6 +113,7 @@ class MLPipelineFactory:
         self.categoricalEncoding = categoricalEncoding
         self.algorithm = algorithm
         self.dropna = True  # drop rows with missing elements before assembling feature vector
+        self.pipelines = dict() # dictionary of different pipelines assembled
 
 
     def make(self):
@@ -145,6 +146,7 @@ class MLPipelineFactory:
             preproStages.append(NaDropper(inputCols))
         # assemble feature vectors
         print("assembling feature vectors, using input columns: ", inputCols)
+        self.inputCols = inputCols # store for later access
         assembleFeatures = VectorAssembler(inputCols=inputCols, outputCol="features")
         preproStages.append(assembleFeatures)
 
@@ -173,19 +175,26 @@ class MLPipelineFactory:
         #    finalStages.append(ColumnCaster("prediction", "int"))
 
         # assemble
-        categoricalPipeline = Pipeline(stages=handleCategoricals)
-        preproPipeline = Pipeline(stages=preproStages)
-        finalPipeline = Pipeline(stages=finalStages)
-        completePipeline = Pipeline(stages=preproStages + finalStages)
+        self.pipelines["pre"] = Pipeline(stages=preproStages)
+        self.pipelines["post"] = Pipeline(stages=finalStages)
+        self.pipelines["complete"] = Pipeline(stages=preproStages + finalStages)
+    
+    
+    def getPipeline(self, part="complete"):
+        return self.pipelines[part]
+    
+    def getInputColumns(self):
+        return self.inputCols
+        
 
-        return (categoricalPipeline, preproPipeline, finalPipeline, completePipeline)
 
-
-def evaluateClassifier(pipeline, data):
+def evaluateClassifier(pipelineFactory, data):
     splitRatio=0.8
     training, test = data.randomSplit([splitRatio, 1-splitRatio])
     training = training.cache()
 
+    #pipelineFactory.make()
+    pipeline = pipelineFactory.getPipeline()
     # fit model to training set
     model = pipeline.fit(training)
     # predict on test set
@@ -203,5 +212,13 @@ def evaluateClassifier(pipeline, data):
     return metrics
 
 
-def computeFeatureImportances():
-    raise NotImplementedError("TODO")
+def computeFeatureImportances(pipelineFactory, data):
+    # TODO: fit model to entire data set?
+    #pipelineFactory.make()
+    pipeline = pipelineFactory.getPipeline()
+    cols = pipelineFactory.getInputColumns()
+    model = pipeline.fit(data)
+    predictor = model.stages[-1]
+    importances = pandas.Series(predictor.featureImportances, index=cols)
+    importances.sort_values(ascending=False, inplace=True)
+    return importances
