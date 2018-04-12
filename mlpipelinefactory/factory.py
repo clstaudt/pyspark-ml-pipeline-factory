@@ -102,7 +102,7 @@ class MLPipelineFactory:
     }
 
 
-    def __init__(self, problemType, algorithm, data, target, numericCols, categoricalCols=None, categoricalEncoding="indexed", dropna=True):
+    def __init__(self, problemType, data, target, numericCols, categoricalCols, categoricalEncoding="index", dropna=True, algorithm=None):
         """ """
         self.problemType = problemType
         self.data = data  # TODO: copy dataframe?
@@ -114,6 +114,12 @@ class MLPipelineFactory:
         self.algorithm = algorithm
         self.dropna = True  # drop rows with missing elements before assembling feature vector
         self.pipelines = dict() # dictionary of different pipelines assembled
+        # select default algorithm
+        if algorithm is None:
+            if problemType is "classification":
+                self.algorithm = "Random Forest"
+            elif problemType is "regression":
+                self.algorithm = "Boosted Trees"
 
 
     def make(self):
